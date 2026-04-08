@@ -55,4 +55,5 @@ nunit-*.xml
 
 *.log
 test_app
-
+.vs
+.idea
