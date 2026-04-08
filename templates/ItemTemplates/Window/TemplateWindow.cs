@@ -6,8 +6,5 @@ namespace AppTemplate.Views;
 
 public partial class TemplateWindow : WindowBase
 {
-    public TemplateWindow() : base()
-    {
-        ConfigureSignals(Builder);
-    }
+	
 }

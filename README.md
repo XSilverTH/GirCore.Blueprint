@@ -15,11 +15,7 @@ This project streamlines the development of Gir.Core applications by automating 
 
 ## Installation
 
-To install the templates locally, navigate to the root directory of this repository and run:
-
-```bash
-dotnet new install ./
-```
+To install the templates locally, execute `test_and_install.sh`
 
 ## Usage
 
