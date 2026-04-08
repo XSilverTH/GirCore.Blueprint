@@ -1,0 +1,25 @@
+{
+    "$schema": "http://json.schemastore.org/template",
+    "author": "Antigravity",
+    "classifications": [
+        "Desktop",
+        "GTK",
+        "Libadwaita"
+    ],
+    "name": "Gir.Core GTK Window",
+    "identity": "GirCoreBlueprintWindow",
+    "shortName": "gircore-adw-window",
+    "tags": {
+        "language": "C#",
+        "type": "item"
+    },
+    "sourceName": "TemplateWindow",
+    "preferNameDirectory": false,
+    "symbols": {
+        "namespace": {
+            "type": "parameter",
+            "datatype": "string",
+            "replaces": "AppTemplate.Views"
+        }
+    }
+}

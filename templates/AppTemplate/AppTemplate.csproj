@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>AppTemplate</AssemblyName>
+    <RootNamespace>AppTemplate</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Update="**\*.cs">
+      <DependentUpon>%(Filename).blp</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GirCore.Adw-1" Version="0.7.0" />
+    <PackageReference Include="XSTH.Blueprint.Helpers" Version="1.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="**\*.blp" />
+  </ItemGroup>
+
+</Project>

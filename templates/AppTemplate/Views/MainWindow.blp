@@ -1,0 +1,37 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.ApplicationWindow MainWindow {
+  default-width: 800;
+  default-height: 600;
+  title: "AppTemplate";
+
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      title-widget: Adw.WindowTitle {
+        title: "AppTemplate";
+        subtitle: "Template Application";
+      };
+    }
+
+    content: Adw.StatusPage {
+      title: "Welcome";
+      description: "Hello, World!";
+      icon-name: "face-smile-big-symbolic";
+
+      child: Box {
+        orientation: vertical;
+        spacing: 12;
+        valign: center;
+
+        Button click_me_button {
+          label: "Click Me!";
+          halign: center;
+          clicked => $OnClickMeButton_Clicked();
+          styles ["pill", "suggested-action"]
+        }
+      };
+    };
+  };
+}

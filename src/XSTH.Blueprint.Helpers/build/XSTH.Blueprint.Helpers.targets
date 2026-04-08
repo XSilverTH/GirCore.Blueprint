@@ -1,0 +1,69 @@
+<Project>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="IntermediateOutputPath" />
+  </ItemGroup>
+  <PropertyGroup>
+    <GResourceManifest>$(IntermediateOutputPath)resources.xml</GResourceManifest>
+    <GResourceBundle>$(IntermediateOutputPath)app.gresource</GResourceBundle>
+    <!-- Allow consumer to override GResourcePrefix, default to project namespace if available -->
+    <GResourcePrefix Condition="'$(GResourcePrefix)' == ''">$(RootNamespace)</GResourcePrefix>
+    <!-- Fallback if RootNamespace is not set, replace dots with slashes -->
+    <GResourcePrefix Condition="'$(GResourcePrefix)' != ''">$([System.String]::Copy('$(GResourcePrefix)').Replace('.','/'))</GResourcePrefix>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(GResourceBundle)" LogicalName="app.gresource" />
+    <!-- Globally collect all blueprint files so other evaluation steps can see them -->
+    <BlueprintFiles Include="**\*.blp" />
+    <!-- Statically map Blueprint files to their intermediate .ui output for the Roslyn Analyzer to pick up -->
+    <AdditionalFiles Include="@(BlueprintFiles->'$(IntermediateOutputPath)%(Identity).ui')" />
+  </ItemGroup>
+
+  <Target Name="CompileBlueprintAndGResources" BeforeTargets="BeforeCompile">
+
+    <MakeDir Directories="@(BlueprintFiles->'$(IntermediateOutputPath)%(RelativeDir)')" />
+    <Exec Command="blueprint-compiler compile %(BlueprintFiles.Identity) --output $(IntermediateOutputPath)%(BlueprintFiles.Identity).ui"
+          Condition="'@(BlueprintFiles)' != ''" />
+
+    <!-- 
+      GTK Builder automatically tries to connect signals using C g_module_symbol lookup.
+      Since gir.core signals are dynamically bound via Roslyn C# delegates, we strip the <signal> tags from the 
+      XML file injected into the Resource Bundle. Our Source Generator still reads the original .ui file.
+    -->
+    <Exec Command="sed -e 's/&lt;signal[^&gt;]*&gt;//g' -e 's/&lt;\/signal&gt;//g' $(IntermediateOutputPath)%(BlueprintFiles.Identity).ui &gt; $(IntermediateOutputPath)%(BlueprintFiles.Identity).stripped.ui"
+          Condition="'@(BlueprintFiles)' != ''" />
+
+    <ItemGroup>
+      <ManifestLines Include="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;" />
+      <ManifestLines Include="&lt;gresources&gt;" />
+      <ManifestLines Include="  &lt;gresource prefix=&quot;$(GResourcePrefix)&quot;&gt;" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'@(BlueprintFiles)' != ''">
+      <ManifestLines Include="    &lt;file alias=&quot;%(BlueprintFiles.RelativeDir)%(BlueprintFiles.Filename).ui&quot;&gt;%(BlueprintFiles.Identity).stripped.ui&lt;/file&gt;" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ManifestLines Include="  &lt;/gresource&gt;" />
+      <ManifestLines Include="&lt;/gresources&gt;" />
+    </ItemGroup>
+
+    <WriteLinesToFile File="$(GResourceManifest)"
+                      Lines="@(ManifestLines)"
+                      Overwrite="true" />
+
+    <Exec Command="glib-compile-resources --sourcedir=$(IntermediateOutputPath) --target=$(GResourceBundle) $(GResourceManifest)" />
+
+    <Message Importance="High" Text="Successfully compiled Blueprint and generated $(GResourceBundle)" />
+  </Target>
+
+  <Target Name="CleanBlueprintResources" AfterTargets="Clean">
+    <ItemGroup>
+      <FilesToClean Include="$(IntermediateOutputPath)**\*.ui" />
+      <FilesToClean Include="$(IntermediateOutputPath)**\*.stripped.ui" />
+      <FilesToClean Include="$(IntermediateOutputPath)resources.xml" />
+      <FilesToClean Include="$(IntermediateOutputPath)app.gresource" />
+    </ItemGroup>
+    <Delete Files="@(FilesToClean)" />
+  </Target>
+</Project>

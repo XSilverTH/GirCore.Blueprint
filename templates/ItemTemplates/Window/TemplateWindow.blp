@@ -1,0 +1,28 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.ApplicationWindow TemplateWindow {
+  default-width: 600;
+  default-height: 400;
+  title: "TemplateWindow";
+
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar header_bar {
+      title-widget: Adw.WindowTitle {
+        title: "TemplateWindow";
+      };
+    }
+
+    content: Box {
+      orientation: vertical;
+      spacing: 12;
+      valign: center;
+
+      Label {
+        label: "Hello, World!";
+        halign: center;
+      }
+    };
+  };
+}

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/XSTH.Blueprint.Helpers/XSTH.Blueprint.Helpers.csproj" />
+  <Project Path="src/XSTH.Blueprint.Generators/XSTH.Blueprint.Generators.csproj" />
+  <Project Path="templates/AppTemplate/AppTemplate.csproj" />
+</Solution>

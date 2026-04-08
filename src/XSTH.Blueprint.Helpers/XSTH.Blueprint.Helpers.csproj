@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>XSTH.Blueprint.Helpers</PackageId>
+    <Version>1.0.12</Version>
+    <Authors>XSTHTH</Authors>
+    <Description>Helper library and MSBuild targets for compiling Blueprint and GResources in Gir.Core applications.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="GirCore.Adw-1" Version="0.7.0" />
+    <!-- Pack the build targets into the correct folder inside the NuGet package -->
+    <None Include="build\XSTH.Blueprint.Helpers.targets" Pack="true" PackagePath="build\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Add the generator as a project reference so it builds first -->
+    <ProjectReference Include="..\XSTH.Blueprint.Generators\XSTH.Blueprint.Generators.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);_PackAnalyzers</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Target Name="_PackAnalyzers">
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="..\XSTH.Blueprint.Generators\bin\$(Configuration)\netstandard2.0\XSTH.Blueprint.Generators.dll" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>
