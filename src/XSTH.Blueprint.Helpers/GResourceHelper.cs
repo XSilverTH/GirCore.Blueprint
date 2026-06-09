@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Reflection;
 using Gio;
 
@@ -7,8 +8,8 @@ public static class GResourceHelper
 {
     public static void RegisterAssemblyResources(Assembly assembly)
     {
-        Console.WriteLine($"[DEBUG] Assembly: {assembly.FullName}");
-        Console.WriteLine($"[DEBUG] Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}");
+        Debug.WriteLine($"[DEBUG] Assembly: {assembly.FullName}");
+        Debug.WriteLine($"[DEBUG] Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}");
         
         const string resourceName = "app.gresource";
 
@@ -16,7 +17,7 @@ public static class GResourceHelper
 
         if (stream == null)
         {
-            Console.WriteLine($"[WARNING] Embedded resource '{resourceName}' not found in assembly.");
+            Debug.WriteLine($"[WARNING] Embedded resource '{resourceName}' not found in assembly.");
             return;
         }
 
