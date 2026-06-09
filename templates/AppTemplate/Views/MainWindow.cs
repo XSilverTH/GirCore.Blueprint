@@ -3,7 +3,7 @@ using XSTH.Blueprint.Helpers;
 
 namespace AppTemplate.Views;
 
-public partial class MainWindow:WindowBase
+public partial class MainWindow:WindowBase<Adw.ApplicationWindow>
 {
     private void OnClickMeButton_Clicked(object? sender, EventArgs e)
     {

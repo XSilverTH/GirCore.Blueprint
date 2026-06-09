@@ -14,8 +14,8 @@ public class App : Adw.Application
     private void Activate(Gio.Application sender, EventArgs args)
     {
         var mainWindowWrapper = new MainWindow();
-        var mainWindow = mainWindowWrapper.Window;
-        
+        var mainWindow = mainWindowWrapper.Widget;
+
         mainWindow.Application = this;
 
         AddWindow(mainWindow);

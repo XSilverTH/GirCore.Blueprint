@@ -49,7 +49,7 @@ When you build the project, custom MSBuild targets execute the following workflo
 4. Generates a `resources.xml` manifest and runs `glib-compile-resources` to produce an `app.gresource` bundle.
 5. Embeds the generated `app.gresource` into the final assembly as an `<EmbeddedResource>`.
 
-At runtime, the `WindowBase` class and `GResourceLoader` extract and register the embedded resource stream with GIO before GTK attempts to load the UI files.
+At runtime, the `WindowBase<T>` class and `GResourceLoader` extract and register the embedded resource stream with GIO before GTK attempts to load the UI files.
 
 ### Roslyn Source Generator (XSTH.Blueprint.Generators)
 
@@ -60,7 +60,7 @@ For each Blueprint file that defines a signal:
 2. It generates a partial class containing a strongly-typed `ConfigureSignals(Gtk.Builder builder)` method.
 3. This method uses the parsed class to cast the builder object statically (`as Gtk.Button`) and natively binds the event (`obj.OnClicked += this.MyHandler`), entirely bypassing Reflection. This guarantees optimal performance and strict compatibility with the .NET Trimmer and Native AOT compilers.
 
-To use this functionality, simply inherit from `XSTH.Blueprint.Helpers.WindowBase`, declare your class as `partial`, and call `ConfigureSignals(Builder)` in the constructor. The included templates are already configured to utilize this.
+To use this functionality, simply inherit from `XSTH.Blueprint.Helpers.WindowBase<T>` (e.g., `WindowBase<Adw.ApplicationWindow>`), declare your class as `partial`, and call `ConfigureSignals(Builder)` in the constructor. The included templates are already configured to utilize this.
 
 ## Requirements
 

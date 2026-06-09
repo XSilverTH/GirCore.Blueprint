@@ -3,14 +3,14 @@ using Gtk;
 
 namespace XSTH.Blueprint.Helpers;
 
-public abstract class WindowBase
+public abstract class WindowBase<T> where T : Gtk.Widget
 {
     protected readonly Builder Builder;
-    public Adw.ApplicationWindow Window { get; }
+    public T Widget { get; }
     protected WindowBase()
     {
         Builder = Builder.NewFromResource($"/{GetType().Namespace!.Replace('.', '/')}/{GetType().Name}.ui");
-        Window = (Adw.ApplicationWindow)Builder.GetObject(GetType().Name)!;
+        Widget = (T)Builder.GetObject(GetType().Name)!;
         ConfigureSignals(Builder);
     }
 
