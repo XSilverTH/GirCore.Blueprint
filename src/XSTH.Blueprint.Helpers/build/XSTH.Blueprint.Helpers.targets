@@ -19,7 +19,14 @@
     <AdditionalFiles Include="@(BlueprintFiles->'$(IntermediateOutputPath)%(Identity).ui')" />
   </ItemGroup>
 
-  <Target Name="CompileBlueprintAndGResources" BeforeTargets="BeforeCompile">
+  <Target Name="CheckGtkTooling" BeforeTargets="CompileBlueprintAndGResources">
+    <Exec Command="blueprint-compiler --version" IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="BlueprintCompilerExitCode" />
+    </Exec>
+    <Error Condition="'$(BlueprintCompilerExitCode)' != '0'" Text="blueprint-compiler is not installed or not in your PATH." />
+  </Target>
+
+  <Target Name="CompileBlueprintAndGResources" BeforeTargets="BeforeCompile" Inputs="@(BlueprintFiles)" Outputs="$(GResourceBundle)">
 
     <MakeDir Directories="@(BlueprintFiles->'$(IntermediateOutputPath)%(RelativeDir)')" />
     <Exec Command="blueprint-compiler compile %(BlueprintFiles.Identity) --output $(IntermediateOutputPath)%(BlueprintFiles.Identity).ui"
