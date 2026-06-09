@@ -27,7 +27,7 @@ New-Item -ItemType Directory -Path "test_app" -Force | Out-Null
 Push-Location test_app
 
 dotnet new gircore-adw -n MyApp
-Set-Location MyApp
+Push-Location MyApp
 
 # Clear NuGet cache for our local package before building
 $cachePath = Join-Path $HOME ".nuget/packages/xsth.blueprint.helpers"
