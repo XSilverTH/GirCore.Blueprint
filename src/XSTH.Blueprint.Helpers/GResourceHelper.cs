@@ -5,10 +5,9 @@ namespace XSTH.Blueprint.Helpers;
 
 public static class GResourceHelper
 {
-    public static void RegisterAssemblyResources()
+    public static void RegisterAssemblyResources(Assembly assembly)
     {
-        var assembly = Assembly.GetCallingAssembly();
-        Console.WriteLine($"[DEBUG] Calling assembly: {assembly.FullName}");
+        Console.WriteLine($"[DEBUG] Assembly: {assembly.FullName}");
         Console.WriteLine($"[DEBUG] Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}");
         
         const string resourceName = "app.gresource";
