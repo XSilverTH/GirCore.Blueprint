@@ -11,7 +11,7 @@
     <Task>
       <Using Namespace="System" />
       <Using Namespace="System.IO" />
-      <Using Namespace="System.Text.RegularExpressions" />
+      <Using Namespace="System.Xml.Linq" />
       <Code Type="Fragment" Language="cs">
         <![CDATA[
           if (InputFiles.Length != OutputFiles.Length)
@@ -27,11 +27,9 @@
               
               if (!File.Exists(inputPath)) continue;
 
-              string content = File.ReadAllText(inputPath);
-              string result = Regex.Replace(content, @"<signal[^>]*>", string.Empty);
-              result = Regex.Replace(result, @"</signal>", string.Empty);
-              
-              File.WriteAllText(outputPath, result);
+              XDocument doc = XDocument.Load(inputPath);
+              doc.Descendants("signal").Remove();
+              doc.Save(outputPath);
           }
         ]]>
       </Code>
