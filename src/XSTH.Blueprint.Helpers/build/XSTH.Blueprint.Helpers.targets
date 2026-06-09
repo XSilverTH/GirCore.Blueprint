@@ -11,6 +11,7 @@
     <Task>
       <Using Namespace="System" />
       <Using Namespace="System.IO" />
+      <Using Namespace="System.Xml" />
       <Using Namespace="System.Xml.Linq" />
       <Code Type="Fragment" Language="cs">
         <![CDATA[
@@ -29,7 +30,16 @@
 
               XDocument doc = XDocument.Load(inputPath);
               doc.Descendants("signal").Remove();
-              doc.Save(outputPath);
+              
+              XmlWriterSettings settings = new XmlWriterSettings { 
+                  Indent = true, 
+                  OmitXmlDeclaration = true,
+                  Encoding = new System.Text.UTF8Encoding(false)
+              };
+              using (XmlWriter writer = XmlWriter.Create(outputPath, settings))
+              {
+                  doc.Save(writer);
+              }
           }
         ]]>
       </Code>
