@@ -8,6 +8,14 @@ namespace XSTH.Blueprint.Generators;
 [Generator]
 public class BlueprintSignalGenerator : IIncrementalGenerator
 {
+    private static readonly DiagnosticDescriptor GeneratorError = new DiagnosticDescriptor(
+        id: "BSG001",
+        title: "Blueprint Signal Generator Error",
+        messageFormat: "Blueprint Signal Generator failed to generate code for file '{0}': {1}",
+        category: "BlueprintSignalGenerator",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         // Find all AdditionalFiles that end with .ui
@@ -141,9 +149,9 @@ public class BlueprintSignalGenerator : IIncrementalGenerator
 
             context.AddSource($"{windowId}.Signals.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Generator exceptions fail silently or can be logged as diagnostics
+            context.ReportDiagnostic(Diagnostic.Create(GeneratorError, Location.None, file.Path, ex.Message));
         }
     }
 
