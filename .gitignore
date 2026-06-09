@@ -57,3 +57,5 @@ nunit-*.xml
 test_app
 .vs
 .idea
+
+pkg/
