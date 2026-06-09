@@ -2,6 +2,42 @@
   <ItemGroup>
     <CompilerVisibleProperty Include="IntermediateOutputPath" />
   </ItemGroup>
+
+  <UsingTask TaskName="StripGtkSignals" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <InputFiles ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <OutputFiles ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Text.RegularExpressions" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+          if (InputFiles.Length != OutputFiles.Length)
+          {
+              Log.LogError("InputFiles and OutputFiles must have the same length.");
+              return false;
+          }
+
+          for (int i = 0; i < InputFiles.Length; i++)
+          {
+              string inputPath = InputFiles[i].GetMetadata("FullPath");
+              string outputPath = OutputFiles[i].GetMetadata("FullPath");
+              
+              if (!File.Exists(inputPath)) continue;
+
+              string content = File.ReadAllText(inputPath);
+              string result = Regex.Replace(content, @"<signal[^>]*>", string.Empty);
+              result = Regex.Replace(result, @"</signal>", string.Empty);
+              
+              File.WriteAllText(outputPath, result);
+          }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
   <PropertyGroup>
     <GResourceManifest>$(IntermediateOutputPath)resources.xml</GResourceManifest>
     <GResourceBundle>$(IntermediateOutputPath)app.gresource</GResourceBundle>
@@ -37,7 +73,9 @@
       Since gir.core signals are dynamically bound via Roslyn C# delegates, we strip the <signal> tags from the 
       XML file injected into the Resource Bundle. Our Source Generator still reads the original .ui file.
     -->
-    <Exec Command="sed -e 's/&lt;signal[^&gt;]*&gt;//g' -e 's/&lt;\/signal&gt;//g' $(IntermediateOutputPath)%(BlueprintFiles.Identity).ui &gt; $(IntermediateOutputPath)%(BlueprintFiles.Identity).stripped.ui"
+    <StripGtkSignals 
+          InputFiles="$(IntermediateOutputPath)%(BlueprintFiles.Identity).ui"
+          OutputFiles="$(IntermediateOutputPath)%(BlueprintFiles.Identity).stripped.ui"
           Condition="'@(BlueprintFiles)' != ''" />
 
     <ItemGroup>
