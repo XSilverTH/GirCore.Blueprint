@@ -1,0 +1,19 @@
+using Gtk 4.0;
+
+Box TemplateView {
+  orientation: vertical;
+  spacing: 12;
+  margin-top: 24;
+  margin-bottom: 24;
+  margin-start: 24;
+  margin-end: 24;
+
+  Label {
+    label: "Blueprint view";
+  }
+
+  Button action_button {
+    label: "Run action";
+    clicked => $OnActionButtonClicked();
+  }
+}

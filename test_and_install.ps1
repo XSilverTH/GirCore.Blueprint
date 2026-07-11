@@ -18,6 +18,10 @@ Write-Host "Installing template locally..."
 # Try to uninstall, ignore errors if it doesn't exist
 dotnet new uninstall ./templates/AppTemplate | Out-Null
 dotnet new install ./templates/AppTemplate
+dotnet new uninstall ./templates/ItemTemplates/Window | Out-Null
+dotnet new install ./templates/ItemTemplates/Window
+dotnet new uninstall ./templates/ItemTemplates/View | Out-Null
+dotnet new install ./templates/ItemTemplates/View
 
 Write-Host "Generating test application..."
 if (Test-Path "test_app") {

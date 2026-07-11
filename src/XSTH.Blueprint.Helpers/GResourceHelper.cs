@@ -1,34 +1,27 @@
-using System.Diagnostics;
 using System.Reflection;
 using Gio;
 
 namespace XSTH.Blueprint.Helpers;
 
+/// <summary>Registers the <c>app.gresource</c> embedded by the package MSBuild targets.</summary>
 public static class GResourceHelper
 {
+    /// <summary>Registers the compiled Blueprint resource bundle embedded in <paramref name="assembly"/>.</summary>
     public static void RegisterAssemblyResources(Assembly assembly)
     {
-        Debug.WriteLine($"[DEBUG] Assembly: {assembly.FullName}");
-        Debug.WriteLine($"[DEBUG] Available resources: {string.Join(", ", assembly.GetManifestResourceNames())}");
-        
+        ArgumentNullException.ThrowIfNull(assembly);
+
         const string resourceName = "app.gresource";
+        using var stream = assembly.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException(
+                $"Assembly '{assembly.FullName}' does not contain '{resourceName}'. " +
+                "Ensure the project references XSTH.Blueprint.Helpers and contains at least one .blp file.");
 
-        using var stream = assembly.GetManifestResourceStream(resourceName);
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
 
-        if (stream == null)
-        {
-            Debug.WriteLine($"[WARNING] Embedded resource '{resourceName}' not found in assembly.");
-            return;
-        }
-
-        using var ms = new MemoryStream();
-        stream.CopyTo(ms);
-        
-        var bytes = ms.ToArray();
-        
-        var bytesRef = GLib.Bytes.New(bytes);
-        var resource = Resource.NewFromData(bytesRef);
-        
+        var bytes = GLib.Bytes.New(memory.ToArray());
+        var resource = Resource.NewFromData(bytes);
         Functions.ResourcesRegister(resource);
     }
 }

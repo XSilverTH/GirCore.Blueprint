@@ -10,23 +10,34 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace XSTH.Blueprint.Generators
 {
+    public enum BlueprintDiagnosticKind
+    {
+        None,
+        MalformedXml,
+        MissingInterface,
+        MissingRootElement,
+        MissingRootIdentity
+    }
+
     public record SignalModel(string SignalName, string Handler, string ObjectId, string ObjectClass);
 
     public record FileSignalsModel(
         string FilePath,
-        string? WindowId,
+        string? RootId,
         string? FinalNamespace,
         ImmutableArray<SignalModel> Signals,
-        string? ErrorMessage = null
+        string? ErrorMessage = null,
+        BlueprintDiagnosticKind DiagnosticKind = BlueprintDiagnosticKind.None
     )
     {
         public virtual bool Equals(FileSignalsModel? other)
         {
             if (other is null) return false;
             return FilePath == other.FilePath &&
-                   WindowId == other.WindowId &&
+                   RootId == other.RootId &&
                    FinalNamespace == other.FinalNamespace &&
                    ErrorMessage == other.ErrorMessage &&
+                   DiagnosticKind == other.DiagnosticKind &&
                    Signals.SequenceEqual(other.Signals);
         }
 
@@ -35,9 +46,10 @@ namespace XSTH.Blueprint.Generators
             unchecked
             {
                 var hashCode = FilePath.GetHashCode();
-                hashCode = (hashCode * 397) ^ (WindowId?.GetHashCode() ?? 0);
+                hashCode = (hashCode * 397) ^ (RootId?.GetHashCode() ?? 0);
                 hashCode = (hashCode * 397) ^ (FinalNamespace?.GetHashCode() ?? 0);
                 hashCode = (hashCode * 397) ^ (ErrorMessage?.GetHashCode() ?? 0);
+                hashCode = (hashCode * 397) ^ (int)DiagnosticKind;
                 foreach (var signal in Signals)
                 {
                     hashCode = (hashCode * 397) ^ signal.GetHashCode();
@@ -47,33 +59,57 @@ namespace XSTH.Blueprint.Generators
         }
     }
 
+
     [Generator]
     public class BlueprintSignalGenerator : IIncrementalGenerator
     {
-        private static readonly DiagnosticDescriptor GeneratorError = new DiagnosticDescriptor(
+        private static readonly DiagnosticDescriptor MalformedXmlDiagnostic = new DiagnosticDescriptor(
             id: "BSG001",
-            title: "Blueprint Signal Generator Error",
-            messageFormat: "Blueprint Signal Generator failed to generate code for file '{0}': {1}",
+            title: "Malformed Blueprint XML",
+            messageFormat: "Blueprint file '{0}' is not well-formed XML: {1}",
+            category: "BlueprintSignalGenerator",
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor MissingInterfaceDiagnostic = new DiagnosticDescriptor(
+            id: "BSG002",
+            title: "Blueprint interface is missing",
+            messageFormat: "Blueprint file '{0}' must contain a top-level <interface> element",
+            category: "BlueprintSignalGenerator",
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor MissingRootElementDiagnostic = new DiagnosticDescriptor(
+            id: "BSG003",
+            title: "Blueprint root view element is missing",
+            messageFormat: "Blueprint file '{0}' must contain a root <object> or <template> element inside <interface>",
+            category: "BlueprintSignalGenerator",
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor MissingRootIdentityDiagnostic = new DiagnosticDescriptor(
+            id: "BSG004",
+            title: "Blueprint root view identity is missing",
+            messageFormat: "Blueprint file '{0}' has a root <{1}> without a non-blank '{2}' attribute; the root view ID/class is required",
             category: "BlueprintSignalGenerator",
             defaultSeverity: DiagnosticSeverity.Error,
             isEnabledByDefault: true);
 
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
-            // Find all AdditionalFiles that end with .ui
+            // Find all AdditionalFiles that end with .ui.
             var uiFiles = context.AdditionalTextsProvider
                 .Where(file => file.Path.EndsWith(".ui", StringComparison.OrdinalIgnoreCase));
 
-            // Get the namespace from MSBuild properties (RootNamespace)
+            // Get the namespace from MSBuild properties (RootNamespace).
             var rootNamespace = context.AnalyzerConfigOptionsProvider
                 .Select((options, _) =>
                 {
                     options.GlobalOptions.TryGetValue("build_property.RootNamespace", out var rootNamespaceValue);
-                    // Try to infer from path if not found, but we require a matching convention
                     return string.IsNullOrWhiteSpace(rootNamespaceValue) ? "AppTemplate" : rootNamespaceValue;
                 });
 
-            // Get the IntermediateOutputPath from MSBuild properties
+            // Get the IntermediateOutputPath used by the AdditionalFiles convention.
             var intermediateOutputPath = context.AnalyzerConfigOptionsProvider
                 .Select((options, _) =>
                 {
@@ -81,12 +117,10 @@ namespace XSTH.Blueprint.Generators
                     return path ?? "";
                 });
 
-            // Combine UI files with root namespace and intermediate output path
             var inputs = uiFiles
                 .Combine(rootNamespace)
                 .Combine(intermediateOutputPath);
 
-            // Parse UI files into models
             var models = inputs.Select((combined, ct) =>
             {
                 var file = combined.Left.Left;
@@ -95,97 +129,216 @@ namespace XSTH.Blueprint.Generators
                 return ParseUiFile(file, rootNs!, intermediatePath, ct);
             });
 
-            // Generate source code from models
             context.RegisterSourceOutput(models, (spc, model) =>
             {
-                if (model.ErrorMessage != null)
+                if (model.DiagnosticKind != BlueprintDiagnosticKind.None)
                 {
-                    spc.ReportDiagnostic(Diagnostic.Create(GeneratorError, Location.None, model.FilePath, model.ErrorMessage));
+                    var descriptor = GetDiagnosticDescriptor(model.DiagnosticKind);
+                    if (model.DiagnosticKind == BlueprintDiagnosticKind.MalformedXml)
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            descriptor,
+                            Location.None,
+                            model.FilePath,
+                            model.ErrorMessage ?? "The document could not be parsed."));
+                    }
+                    else if (model.DiagnosticKind == BlueprintDiagnosticKind.MissingRootIdentity)
+                    {
+                        var rootElement = model.ErrorMessage?.StartsWith("template", StringComparison.OrdinalIgnoreCase) == true
+                            ? "template"
+                            : "object";
+                        var identityAttribute = rootElement == "template" ? "class" : "id";
+                        spc.ReportDiagnostic(Diagnostic.Create(
+                            descriptor,
+                            Location.None,
+                            model.FilePath,
+                            rootElement,
+                            identityAttribute));
+                    }
+                    else
+                    {
+                        spc.ReportDiagnostic(Diagnostic.Create(descriptor, Location.None, model.FilePath));
+                    }
+
                     return;
                 }
 
-                if (model.WindowId == null || model.FinalNamespace == null || model.Signals.IsEmpty)
+                // A valid root view with no signals does not need generated source.
+                if (model.RootId == null || model.FinalNamespace == null || model.Signals.IsEmpty)
                     return;
 
                 GenerateSource(spc, model);
             });
         }
 
-        private FileSignalsModel ParseUiFile(AdditionalText file, string rootNamespace, string intermediateOutputPath, CancellationToken ct)
+        private static DiagnosticDescriptor GetDiagnosticDescriptor(BlueprintDiagnosticKind kind)
         {
-            var content = file.GetText(ct)?.ToString();
-            if (string.IsNullOrWhiteSpace(content)) 
-                return new FileSignalsModel(file.Path, null, null, ImmutableArray<SignalModel>.Empty);
-
-            try
+            switch (kind)
             {
-                var doc = XDocument.Parse(content);
-                var interfaceNode = doc.Element("interface");
-                if (interfaceNode == null) 
-                    return new FileSignalsModel(file.Path, null, null, ImmutableArray<SignalModel>.Empty);
-
-                // In GTK builder XML, the root object is typically our window/widget class
-                var rootObject = interfaceNode.Element("object") ?? interfaceNode.Element("template");
-                if (rootObject == null) 
-                    return new FileSignalsModel(file.Path, null, null, ImmutableArray<SignalModel>.Empty);
-
-                var windowId = rootObject.Attribute(rootObject.Name == "template" ? "class" : "id")?.Value;
-                if (string.IsNullOrWhiteSpace(windowId)) 
-                    return new FileSignalsModel(file.Path, null, null, ImmutableArray<SignalModel>.Empty);
-
-                // Extract all <signal> elements anywhere in the tree under this object
-                var signals = rootObject.Descendants("signal")
-                    .Select(s => {
-                        var parentObj = s.Ancestors().First(a => a.Name == "object" || a.Name == "template");
-                        var isTemplate = parentObj.Name == "template";
-                        return new SignalModel(
-                            s.Attribute("name")?.Value ?? "",
-                            s.Attribute("handler")?.Value ?? "",
-                            parentObj.Attribute(isTemplate ? "class" : "id")?.Value ?? "",
-                            parentObj.Attribute(isTemplate ? "parent" : "class")?.Value ?? ""
-                        );
-                    })
-                    .Where(s => !string.IsNullOrEmpty(s.SignalName) && !string.IsNullOrEmpty(s.Handler) && !string.IsNullOrEmpty(s.ObjectId) && !string.IsNullOrEmpty(s.ObjectClass))
-                    .ToImmutableArray();
-
-                if (signals.IsEmpty) 
-                    return new FileSignalsModel(file.Path, null, null, ImmutableArray<SignalModel>.Empty);
-
-                // Dynamically evaluate sub-namespace based on MSBuild metadata passed directory
-                var relativeDir = "";
-                if (!string.IsNullOrEmpty(intermediateOutputPath))
-                {
-                    var searchPath = intermediateOutputPath.Replace('\\', '/').TrimEnd('/') + "/";
-                    var filePath = file.Path.Replace('\\', '/');
-                    
-                    var idx = filePath.IndexOf(searchPath, StringComparison.OrdinalIgnoreCase);
-                    if (idx >= 0)
-                    {
-                        var relativePath = filePath.Substring(idx + searchPath.Length);
-                        relativeDir = System.IO.Path.GetDirectoryName(relativePath) ?? "";
-                    }
-                }
-
-                var subNamespace = "";
-                if (!string.IsNullOrEmpty(relativeDir))
-                {
-                    var normalizedDir = relativeDir.Replace('\\', '/').Trim('/');
-                    if (!string.IsNullOrEmpty(normalizedDir))
-                    {
-                        subNamespace = "." + string.Join(".", normalizedDir.Split('/'));
-                    }
-                }
-                var finalNamespace = $"{rootNamespace}{subNamespace}";
-
-                return new FileSignalsModel(file.Path, windowId, finalNamespace, signals);
-            }
-            catch (Exception ex)
-            {
-                return new FileSignalsModel(file.Path, null, null, ImmutableArray<SignalModel>.Empty, ex.Message);
+                case BlueprintDiagnosticKind.MalformedXml:
+                    return MalformedXmlDiagnostic;
+                case BlueprintDiagnosticKind.MissingInterface:
+                    return MissingInterfaceDiagnostic;
+                case BlueprintDiagnosticKind.MissingRootElement:
+                    return MissingRootElementDiagnostic;
+                case BlueprintDiagnosticKind.MissingRootIdentity:
+                    return MissingRootIdentityDiagnostic;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
             }
         }
 
-        private void GenerateSource(SourceProductionContext context, FileSignalsModel model)
+        private FileSignalsModel ParseUiFile(AdditionalText file, string rootNamespace, string intermediateOutputPath, CancellationToken ct)
+        {
+            var content = file.GetText(ct)?.ToString();
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return InvalidModel(
+                    file.Path,
+                    BlueprintDiagnosticKind.MalformedXml,
+                    "The file is empty.");
+            }
+
+            XDocument doc;
+            try
+            {
+                doc = XDocument.Parse(content, LoadOptions.PreserveWhitespace);
+            }
+            catch (Exception ex)
+            {
+                return InvalidModel(file.Path, BlueprintDiagnosticKind.MalformedXml, ex.Message);
+            }
+
+            var interfaceNode = doc.Root != null && NameIs(doc.Root, "interface")
+                ? doc.Root
+                : null;
+            if (interfaceNode == null)
+            {
+                return InvalidModel(file.Path, BlueprintDiagnosticKind.MissingInterface, null);
+            }
+
+            // GTK Builder permits either an object root or a template root.
+            var rootElement = interfaceNode.Elements()
+                .FirstOrDefault(element => NameIs(element, "object") || NameIs(element, "template"));
+            if (rootElement == null)
+            {
+                return InvalidModel(file.Path, BlueprintDiagnosticKind.MissingRootElement, null);
+            }
+
+            var rootIsTemplate = NameIs(rootElement, "template");
+            var rootIdentityAttribute = rootIsTemplate ? "class" : "id";
+            var rootId = rootElement.Attribute(rootIdentityAttribute)?.Value;
+            if (string.IsNullOrWhiteSpace(rootId))
+            {
+                // The diagnostic payload identifies which root form and identity attribute failed.
+                return InvalidModel(
+                    file.Path,
+                    BlueprintDiagnosticKind.MissingRootIdentity,
+                    rootIsTemplate ? "template" : "object");
+            }
+
+            // Extract signals from the complete root view subtree, including nested objects.
+            var signals = rootElement
+                .Descendants()
+                .Where(element => NameIs(element, "signal"))
+                .Select(signal =>
+                {
+                    var parentObject = signal.Ancestors()
+                        .FirstOrDefault(element => NameIs(element, "object") || NameIs(element, "template"));
+                    if (parentObject == null)
+                    {
+                        return null;
+                    }
+
+                    var parentIsTemplate = NameIs(parentObject, "template");
+                    var objectId = parentObject.Attribute(parentIsTemplate ? "class" : "id")?.Value;
+                    var objectClass = parentObject.Attribute(parentIsTemplate ? "parent" : "class")?.Value;
+                    return new SignalModel(
+                        signal.Attribute("name")?.Value ?? "",
+                        signal.Attribute("handler")?.Value ?? "",
+                        objectId ?? "",
+                        objectClass ?? "");
+                })
+                .Where(signal => signal != null &&
+                                !string.IsNullOrWhiteSpace(signal.SignalName) &&
+                                !string.IsNullOrWhiteSpace(signal.Handler) &&
+                                !string.IsNullOrWhiteSpace(signal.ObjectId) &&
+                                !string.IsNullOrWhiteSpace(signal.ObjectClass))
+                .Select(signal => signal!)
+                .ToImmutableArray();
+
+            var finalNamespace = GetFinalNamespace(file.Path, rootNamespace, intermediateOutputPath);
+            return new FileSignalsModel(file.Path, rootId, finalNamespace, signals);
+        }
+
+        private static FileSignalsModel InvalidModel(
+            string filePath,
+            BlueprintDiagnosticKind diagnosticKind,
+            string? errorMessage)
+        {
+            return new FileSignalsModel(
+                filePath,
+                null,
+                null,
+                ImmutableArray<SignalModel>.Empty,
+                errorMessage,
+                diagnosticKind);
+        }
+
+        private static bool NameIs(XElement element, string localName)
+        {
+            return string.Equals(element.Name.LocalName, localName, StringComparison.Ordinal);
+        }
+
+        private static string GetFinalNamespace(
+            string filePath,
+            string rootNamespace,
+            string intermediateOutputPath)
+        {
+            var normalizedFilePath = filePath.Replace('\\', '/');
+            var normalizedIntermediate = (intermediateOutputPath ?? string.Empty)
+                .Replace('\\', '/')
+                .Trim('/');
+            var relativePath = string.Empty;
+
+            if (!string.IsNullOrEmpty(normalizedIntermediate))
+            {
+                var marker = normalizedIntermediate + "/";
+                var index = normalizedFilePath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                if (index >= 0)
+                {
+                    relativePath = normalizedFilePath.Substring(index + marker.Length);
+                }
+                else
+                {
+                    // IntermediateOutputPath is commonly project-relative while AdditionalText.Path is absolute.
+                    marker = "/" + marker;
+                    index = normalizedFilePath.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+                    if (index >= 0)
+                    {
+                        relativePath = normalizedFilePath.Substring(index + marker.Length);
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(relativePath))
+            {
+                relativePath = System.IO.Path.GetFileName(filePath);
+            }
+
+            var relativeDir = System.IO.Path.GetDirectoryName(relativePath) ?? string.Empty;
+            var normalizedDir = relativeDir.Replace('\\', '/').Trim('/');
+            if (string.IsNullOrEmpty(normalizedDir))
+            {
+                return rootNamespace;
+            }
+
+            var folders = normalizedDir
+                .Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            return rootNamespace + "." + string.Join(".", folders);
+        }
+
+        private static void GenerateSource(SourceProductionContext context, FileSignalsModel model)
         {
             var sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/>");
@@ -195,35 +348,59 @@ namespace XSTH.Blueprint.Generators
             sb.AppendLine();
             sb.AppendLine($"namespace {model.FinalNamespace}");
             sb.AppendLine("{");
-            sb.AppendLine($"    public partial class {model.WindowId}");
+            sb.AppendLine($"    public partial class {model.RootId}");
             sb.AppendLine("    {");
             sb.AppendLine("        /// <summary>");
-            sb.AppendLine("        /// Automatically wires up GTK signals defined in the Blueprint/UI file to the C# handlers.");
-            sb.AppendLine("        /// Call this method after retrieving your widgets from the Gtk.Builder.");
+            sb.AppendLine("        /// Wires Blueprint root/view signals to statically typed GirCore handlers.");
             sb.AppendLine("        /// </summary>");
-            sb.AppendLine("        protected override void ConfigureSignals(Gtk.Builder builder)");
+            AppendSignalMethod(sb, "ConfigureSignals", model.Signals, "+=");
+            sb.AppendLine();
+            sb.AppendLine("        /// <summary>");
+            sb.AppendLine("        /// Removes the exact subscriptions made by ConfigureSignals.");
+            sb.AppendLine("        /// </summary>");
+            AppendSignalMethod(sb, "DisposeSignals", model.Signals, "-=");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+
+            var safeNamespace = SanitizeIdentifier(model.FinalNamespace!);
+            var safeRootId = SanitizeIdentifier(model.RootId!);
+            var hintSeed = model.FinalNamespace + "|" + model.RootId;
+            var sourceHint = $"{safeNamespace}_{safeRootId}_Signals_{StableHash(hintSeed)}.g.cs";
+            context.AddSource(sourceHint, SourceText.From(sb.ToString(), Encoding.UTF8));
+        }
+
+        private static void AppendSignalMethod(
+            StringBuilder sb,
+            string methodName,
+            ImmutableArray<SignalModel> signals,
+            string subscriptionOperator)
+        {
+            sb.AppendLine($"        protected override void {methodName}(Gtk.Builder builder)");
             sb.AppendLine("        {");
 
-            foreach (var sig in model.Signals)
+            // One typed local per builder object avoids duplicate local declarations when
+            // several signals are attached to the same widget.
+            var objectGroups = signals
+                .GroupBy(signal => signal.ObjectId, StringComparer.Ordinal)
+                .ToList();
+            for (var objectIndex = 0; objectIndex < objectGroups.Count; objectIndex++)
             {
-                // Convert GTK signal name to C# Gir.Core Event Name (e.g. "clicked" -> "OnClicked")
-                // Gir.Core maps signal "clicked" to event "OnClicked"
-                var eventName = $"On{ToPascalCase(sig.SignalName)}";
-                var typeName = MapToCSharpType(sig.ObjectClass);
-
-                // We assume builder.GetObject works because the user already loaded the UI
-                sb.AppendLine($"            var {sig.ObjectId}_obj = builder.GetObject(\"{sig.ObjectId}\") as {typeName};");
-                sb.AppendLine($"            if ({sig.ObjectId}_obj != null)");
+                var objectGroup = objectGroups[objectIndex];
+                var firstSignal = objectGroup.First();
+                var variableName = "__blueprintObject" + objectIndex;
+                var objectType = MapToCSharpType(firstSignal.ObjectClass);
+                sb.AppendLine($"            var {variableName} = builder.GetObject({QuoteCSharpString(firstSignal.ObjectId)}) as {objectType};");
+                sb.AppendLine($"            if ({variableName} != null)");
                 sb.AppendLine("            {");
-                sb.AppendLine($"                {sig.ObjectId}_obj.{eventName} += {sig.Handler};");
+                foreach (var signal in objectGroup)
+                {
+                    var eventName = $"On{ToPascalCase(signal.SignalName)}";
+                    sb.AppendLine($"                {variableName}.{eventName} {subscriptionOperator} {signal.Handler};");
+                }
                 sb.AppendLine("            }");
             }
 
             sb.AppendLine("        }");
-            sb.AppendLine("    }");
-            sb.AppendLine("}");
-
-            context.AddSource($"{model.WindowId}.Signals.g.cs", SourceText.From(sb.ToString(), Encoding.UTF8));
         }
 
         private static string ToPascalCase(string input)
@@ -255,7 +432,51 @@ namespace XSTH.Blueprint.Generators
             if (gtkClassName.StartsWith("Gsk", StringComparison.Ordinal)) return "Gsk." + gtkClassName.Substring(3);
             if (gtkClassName.StartsWith("Pango", StringComparison.Ordinal)) return "Pango." + gtkClassName.Substring(5);
 
-            return gtkClassName; // Fallback for custom components
+            return gtkClassName;
+        }
+
+        private static string QuoteCSharpString(string value)
+        {
+            return "\"" + value
+                .Replace("\\", "\\\\")
+                .Replace("\"", "\\\"")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n")
+                .Replace("\t", "\\t") + "\"";
+        }
+
+        private static string SanitizeIdentifier(string value)
+        {
+            var result = new StringBuilder();
+            foreach (var character in value)
+            {
+                result.Append(char.IsLetterOrDigit(character) || character == '_' ? character : '_');
+            }
+
+            if (result.Length == 0)
+            {
+                result.Append('_');
+            }
+            else if (char.IsDigit(result[0]))
+            {
+                result.Insert(0, '_');
+            }
+
+            return result.ToString();
+        }
+
+        private static string StableHash(string value)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                foreach (var character in value)
+                {
+                    hash ^= character;
+                    hash *= 16777619;
+                }
+                return hash.ToString("X8");
+            }
         }
     }
 }

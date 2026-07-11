@@ -15,6 +15,10 @@ dotnet nuget add source ./pkg -n local_blueprint_feed --configfile nuget.config
 echo "Installing template locally..."
 dotnet new uninstall ./templates/AppTemplate || true
 dotnet new install ./templates/AppTemplate
+dotnet new uninstall ./templates/ItemTemplates/Window || true
+dotnet new install ./templates/ItemTemplates/Window
+dotnet new uninstall ./templates/ItemTemplates/View || true
+dotnet new install ./templates/ItemTemplates/View
 
 echo "Generating test application..."
 rm -rf test_app || true

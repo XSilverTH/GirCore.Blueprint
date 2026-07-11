@@ -6,15 +6,17 @@
     <Nullable>enable</Nullable>
     <IsPackable>true</IsPackable>
     <PackageId>XSTH.Blueprint.Helpers</PackageId>
-    <Version>1.0.12</Version>
+    <Version>2.0.0</Version>
     <Authors>XSTHTH</Authors>
     <Description>Helper library and MSBuild targets for compiling Blueprint and GResources in Gir.Core applications.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="GirCore.Adw-1" Version="0.7.0" />
     <!-- Pack the build targets into the correct folder inside the NuGet package -->
     <None Include="build\XSTH.Blueprint.Helpers.targets" Pack="true" PackagePath="build\" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
