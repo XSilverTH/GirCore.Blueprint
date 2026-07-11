@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="GirCore.Adw-1" Version="0.7.0" />
+    <PackageReference Include="GirCore.Adw-1" Version="0.8.0" />
     <PackageReference Include="XSTH.Blueprint.Helpers" Version="2.0.0" />
   </ItemGroup>
 
