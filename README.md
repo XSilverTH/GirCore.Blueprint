@@ -1,6 +1,6 @@
 # XSTH.Blueprint.Helpers
 
-`XSTH.Blueprint.Helpers` is a small foundation for GTK 4 / Libadwaita applications that keep Blueprint views in independent `.blp` files. It compiles every Blueprint file in a project, bundles the resulting GTK Builder XML into one GResource, and uses a source generator to wire Blueprint signals directly to GirCore events.
+`XSTH.Blueprint.Helpers` is a small foundation for GTK 4 / Libadwaita applications that keep Blueprint views in independent `.blp` files. It compiles every Blueprint file in a project, bundles the resulting GTK Builder XML and declared application files into one GResource, and uses a source generator to wire Blueprint signals directly to GirCore events.
 
 Version **2.0.0** adds first-class non-window roots and a deliberately narrow `INotifyPropertyChanged` binding pattern. It is not an application framework: applications keep ownership of navigation, dependency composition, commands, and widget placement.
 
@@ -33,6 +33,29 @@ GResourceHelper.RegisterAssemblyResources(typeof(Program).Assembly);
 var app = new App();
 return app.RunWithSynchronizationContext(args);
 ```
+
+## Application resources
+
+Add arbitrary files to the same `app.gresource` with the `GResource` MSBuild item:
+
+```xml
+<ItemGroup>
+  <GResource Include="Assets/**/*" />
+</ItemGroup>
+```
+
+Each file keeps its project-relative path under the existing `GResourcePrefix` (the project `RootNamespace` by default). For a project rooted at `MyApp`, `Assets/logo.svg` is available as `/MyApp/Assets/logo.svg`; for example, load it with `Gdk.Texture.NewFromResource("/MyApp/Assets/logo.svg")`. These resources are available after the existing `GResourceHelper.RegisterAssemblyResources` call. Paths must be project-relative, and files with the same resource path as a compiled Blueprint view or another `GResource` are rejected.
+
+Use `Alias` on an individual item when its resource path should differ from its project path:
+
+```xml
+<ItemGroup>
+  <GResource Include="Branding/application-icon.svg"
+             Alias="icons/application.svg" />
+</ItemGroup>
+```
+
+That file is available as `/MyApp/icons/application.svg`. `Alias` is relative to the GResource prefix; do not include the prefix or a leading slash, and use `/` as its separator.
 
 ## Window roots and ordinary view roots
 

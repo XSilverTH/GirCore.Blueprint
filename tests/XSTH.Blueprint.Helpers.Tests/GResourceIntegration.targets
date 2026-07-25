@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="../../src/XSTH.Blueprint.Helpers/build/XSTH.Blueprint.Helpers.targets" />
+
+  <Target Name="VerifyDeclaredGResources" AfterTargets="CompileBlueprintAndGResources">
+    <Exec Command="gresource extract &quot;$(GResourceBundle)&quot; /XSTH/Blueprint/Helpers/Tests/Fixtures/default-resource.txt" />
+    <Exec Command="gresource extract &quot;$(GResourceBundle)&quot; /XSTH/Blueprint/Helpers/Tests/aliases/resource.txt" />
+    <Exec Command="gresource extract &quot;$(GResourceBundle)&quot; /XSTH/Blueprint/Helpers/Tests/Fixtures/ResourceView.ui" />
+  </Target>
+</Project>

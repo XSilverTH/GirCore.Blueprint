@@ -1,0 +1,6 @@
+<gresources>
+<gresource prefix="XSTH/Blueprint/Helpers/Tests">
+<file alias="aliases/resource.txt">Fixtures/aliased-resource.txt</file>
+<file>Fixtures/default-resource.txt</file>
+</gresource>
+</gresources>

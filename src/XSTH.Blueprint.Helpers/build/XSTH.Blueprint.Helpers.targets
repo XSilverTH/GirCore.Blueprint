@@ -46,6 +46,109 @@
     </Task>
   </UsingTask>
 
+  <UsingTask TaskName="GenerateGResourceManifest" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <BlueprintFiles ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <GResourceFiles ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+      <ManifestPath ParameterType="System.String" Required="true" />
+      <Prefix ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.Collections.Generic" />
+      <Using Namespace="System.IO" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Text" />
+      <Using Namespace="System.Xml" />
+      <Using Namespace="System.Xml.Linq" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+          string NormalizePath(string value, string description)
+          {
+              if (string.IsNullOrWhiteSpace(value) || value != value.Trim())
+              {
+                  throw new InvalidOperationException($"{description} must not be blank or contain leading/trailing whitespace.");
+              }
+
+              string normalized = value.Replace('\\', '/');
+              if (normalized.StartsWith("/", StringComparison.Ordinal) ||
+                  Path.IsPathRooted(normalized) ||
+                  (normalized.Length > 1 && normalized[1] == ':'))
+              {
+                  throw new InvalidOperationException($"{description} must be relative.");
+              }
+
+              string[] segments = normalized.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+              if (segments.Length == 0 || segments.Any(segment => segment == "." || segment == ".."))
+              {
+                  throw new InvalidOperationException($"{description} must not contain '.' or '..' path segments.");
+              }
+
+              return string.Join("/", segments);
+          }
+
+          try
+          {
+              string prefix = NormalizePath(Prefix, "GResourcePrefix");
+              var aliases = new HashSet<string>(StringComparer.Ordinal);
+              var files = new List<XElement>();
+
+              void AddFile(string alias, string source)
+              {
+                  if (!aliases.Add(alias))
+                  {
+                      throw new InvalidOperationException($"The GResource path '{alias}' is declared more than once.");
+                  }
+
+                  files.Add(new XElement("file", new XAttribute("alias", alias), source));
+              }
+
+              foreach (var blueprintFile in BlueprintFiles)
+              {
+                  string alias = NormalizePath(
+                      blueprintFile.GetMetadata("RelativeDir") + blueprintFile.GetMetadata("Filename") + ".ui",
+                      $"Blueprint resource '{blueprintFile.ItemSpec}'");
+                  string source = NormalizePath(
+                      blueprintFile.ItemSpec + ".stripped.ui",
+                      $"Blueprint intermediate output '{blueprintFile.ItemSpec}'");
+                  AddFile(alias, source);
+              }
+
+              foreach (var resourceFile in GResourceFiles)
+              {
+                  string source = NormalizePath(resourceFile.ItemSpec, $"GResource file '{resourceFile.ItemSpec}'");
+                  string aliasMetadata = resourceFile.GetMetadata("Alias");
+                  string alias = NormalizePath(
+                      string.IsNullOrWhiteSpace(aliasMetadata) ? resourceFile.ItemSpec : aliasMetadata,
+                      $"GResource alias for '{resourceFile.ItemSpec}'");
+                  AddFile(alias, source);
+              }
+
+              var document = new XDocument(
+                  new XDeclaration("1.0", "UTF-8", null),
+                  new XElement("gresources", new XElement("gresource", new XAttribute("prefix", prefix), files)));
+
+              string manifestDirectory = Path.GetDirectoryName(ManifestPath);
+              if (!string.IsNullOrEmpty(manifestDirectory))
+              {
+                  Directory.CreateDirectory(manifestDirectory);
+              }
+              using var writer = XmlWriter.Create(ManifestPath, new XmlWriterSettings
+              {
+                  Indent = true,
+                  Encoding = new UTF8Encoding(false)
+              });
+              document.Save(writer);
+          }
+          catch (Exception exception)
+          {
+              Log.LogErrorFromException(exception, true);
+          }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
   <PropertyGroup>
     <GResourceManifest>$(IntermediateOutputPath)resources.xml</GResourceManifest>
     <GResourceBundle>$(IntermediateOutputPath)app.gresource</GResourceBundle>
@@ -70,42 +173,32 @@
     <Error Condition="'$(BlueprintCompilerExitCode)' != '0'" Text="blueprint-compiler is not installed or not in your PATH." />
   </Target>
 
-  <Target Name="CompileBlueprintAndGResources" BeforeTargets="BeforeCompile" Inputs="@(BlueprintFiles)" Outputs="$(GResourceBundle)">
+  <Target Name="CompileBlueprintAndGResources"
+          BeforeTargets="BeforeCompile"
+          Inputs="@(BlueprintFiles);@(GResource);$(MSBuildAllProjects)"
+          Outputs="$(GResourceBundle)">
 
     <MakeDir Directories="@(BlueprintFiles->'$(IntermediateOutputPath)%(RelativeDir)')" />
-    <Exec Command="blueprint-compiler compile %(BlueprintFiles.Identity) --output $(IntermediateOutputPath)%(BlueprintFiles.Identity).ui"
+    <Exec Command="blueprint-compiler compile &quot;%(BlueprintFiles.Identity)&quot; --output &quot;$(IntermediateOutputPath)%(BlueprintFiles.Identity).ui&quot;"
           Condition="'@(BlueprintFiles)' != ''" />
 
-    <!-- 
+    <!--
       GTK Builder automatically tries to connect signals using C g_module_symbol lookup.
-      Since gir.core signals are dynamically bound via Roslyn C# delegates, we strip the <signal> tags from the 
+      Since gir.core signals are dynamically bound via Roslyn C# delegates, we strip the <signal> tags from the
       XML file injected into the Resource Bundle. Our Source Generator still reads the original .ui file.
     -->
-    <StripGtkSignals 
+    <StripGtkSignals
           InputFiles="$(IntermediateOutputPath)%(BlueprintFiles.Identity).ui"
           OutputFiles="$(IntermediateOutputPath)%(BlueprintFiles.Identity).stripped.ui"
           Condition="'@(BlueprintFiles)' != ''" />
 
-    <ItemGroup>
-      <ManifestLines Include="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;" />
-      <ManifestLines Include="&lt;gresources&gt;" />
-      <ManifestLines Include="  &lt;gresource prefix=&quot;$(GResourcePrefix)&quot;&gt;" />
-    </ItemGroup>
+    <GenerateGResourceManifest
+          BlueprintFiles="@(BlueprintFiles)"
+          GResourceFiles="@(GResource)"
+          ManifestPath="$(GResourceManifest)"
+          Prefix="$(GResourcePrefix)" />
 
-    <ItemGroup Condition="'@(BlueprintFiles)' != ''">
-      <ManifestLines Include="    &lt;file alias=&quot;%(BlueprintFiles.RelativeDir)%(BlueprintFiles.Filename).ui&quot;&gt;%(BlueprintFiles.Identity).stripped.ui&lt;/file&gt;" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <ManifestLines Include="  &lt;/gresource&gt;" />
-      <ManifestLines Include="&lt;/gresources&gt;" />
-    </ItemGroup>
-
-    <WriteLinesToFile File="$(GResourceManifest)"
-                      Lines="@(ManifestLines)"
-                      Overwrite="true" />
-
-    <Exec Command="glib-compile-resources --sourcedir=$(IntermediateOutputPath) --target=$(GResourceBundle) $(GResourceManifest)" />
+    <Exec Command="glib-compile-resources --sourcedir=&quot;$(MSBuildProjectDirectory)&quot; --sourcedir=&quot;$(IntermediateOutputPath)&quot; --target=&quot;$(GResourceBundle)&quot; &quot;$(GResourceManifest)&quot;" />
 
     <Message Importance="High" Text="Successfully compiled Blueprint and generated $(GResourceBundle)" />
   </Target>

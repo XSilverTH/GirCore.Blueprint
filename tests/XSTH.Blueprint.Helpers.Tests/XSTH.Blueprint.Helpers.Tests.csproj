@@ -4,6 +4,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <CustomAfterMicrosoftCommonTargets>$(MSBuildThisFileDirectory)GResourceIntegration.targets</CustomAfterMicrosoftCommonTargets>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,4 +19,11 @@
   <ItemGroup>
     <ProjectReference Include="../../src/XSTH.Blueprint.Helpers/XSTH.Blueprint.Helpers.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <GResource Include="Fixtures/default-resource.txt" />
+    <GResource Include="Fixtures/aliased-resource.txt"
+               Alias="aliases/resource.txt" />
+  </ItemGroup>
+
 </Project>

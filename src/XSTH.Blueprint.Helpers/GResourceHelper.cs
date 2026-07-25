@@ -6,7 +6,7 @@ namespace XSTH.Blueprint.Helpers;
 /// <summary>Registers the <c>app.gresource</c> embedded by the package MSBuild targets.</summary>
 public static class GResourceHelper
 {
-    /// <summary>Registers the compiled Blueprint resource bundle embedded in <paramref name="assembly"/>.</summary>
+    /// <summary>Registers the application resource bundle embedded in <paramref name="assembly"/>.</summary>
     public static void RegisterAssemblyResources(Assembly assembly)
     {
         ArgumentNullException.ThrowIfNull(assembly);
@@ -15,7 +15,7 @@ public static class GResourceHelper
         using var stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException(
                 $"Assembly '{assembly.FullName}' does not contain '{resourceName}'. " +
-                "Ensure the project references XSTH.Blueprint.Helpers and contains at least one .blp file.");
+                "Ensure the project references XSTH.Blueprint.Helpers and declares a Blueprint or GResource file.");
 
         using var memory = new MemoryStream();
         stream.CopyTo(memory);
